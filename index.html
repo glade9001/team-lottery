@@ -129,14 +129,33 @@
   .reel {
     font-size: 40px;
     font-weight: 800;
-    min-height: 58px;
-    line-height: 58px;
+    min-height: 72px;
+    line-height: 72px;
     margin: 10px 0 6px;
     background: linear-gradient(90deg, var(--accent), var(--accent2));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
     letter-spacing: 3px;
+    transform-origin: center;
+  }
+  .reel.win {
+    font-size: 60px;
+    animation: reelPop .6s cubic-bezier(.18,1.5,.4,1) both;
+    filter: drop-shadow(0 4px 18px rgba(255,180,70,.55));
+  }
+  @keyframes reelPop {
+    0%   { transform: scale(.3);  opacity: 0; }
+    55%  { transform: scale(1.3); opacity: 1; }
+    75%  { transform: scale(.92); }
+    100% { transform: scale(1); }
+  }
+
+  #confetti {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 50;
   }
   .result-note { color: var(--muted); font-size: 14px; min-height: 20px; margin-bottom: 14px; }
 
@@ -283,6 +302,7 @@
     <div class="result-note" id="note">請選擇小隊後按下抽獎</div>
     <button class="draw" id="drawBtn">開 始 抽 獎</button>
     <div class="footer">
+      <button id="soundBtn">🔊 音效開</button>
       <button id="resetBtn">重置全部</button>
     </div>
   </div>
@@ -292,6 +312,8 @@
     <div id="logList"></div>
   </div>
 </div>
+
+<canvas id="confetti"></canvas>
 
 <!-- 後台 Modal -->
 <div class="modal-mask" id="adminMask">
@@ -349,6 +371,102 @@
   }
   function save() { localStorage.setItem(STORE_KEY, JSON.stringify(results)); }
   function saveAssign() { localStorage.setItem(ASSIGN_KEY, JSON.stringify(assignments)); }
+
+  // ===== 音效（Web Audio，即時合成、免音檔、可離線）=====
+  let audioCtx = null;
+  let soundOn = localStorage.getItem("team-lottery-sound") !== "off";
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  }
+  // 單一音符
+  function tone(freq, start, dur, { type = "square", vol = 0.2 } = {}) {
+    if (!soundOn || !audioCtx) return;
+    const t = audioCtx.currentTime + start;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start(t);
+    o.stop(t + dur + 0.02);
+  }
+  // 轉盤每格「答」聲，pitch 隨進度略升
+  function tickSound(progress) {
+    tone(700 + progress * 500, 0, 0.04, { type: "square", vol: 0.09 });
+  }
+  // 中獎小號聲
+  function fanfare() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+      tone(f, i * 0.11, 0.34, { type: "triangle", vol: 0.28 })
+    );
+  }
+
+  // ===== 彩帶特效（canvas，純合成、離線可用）=====
+  const confettiCanvas = document.getElementById("confetti");
+  const cctx = confettiCanvas.getContext("2d");
+  let confetti = [];
+  let confettiRAF = null;
+
+  function resizeConfetti() {
+    confettiCanvas.width = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resizeConfetti);
+  resizeConfetti();
+
+  function burstConfetti() {
+    const colors = ["#ffd45e", "#ff7a59", "#4ade80", "#60a5fa", "#f472b6", "#ffffff"];
+    const cx = window.innerWidth / 2;
+    const cy = window.innerHeight * 0.34;
+    for (let i = 0; i < 150; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 4 + Math.random() * 11;
+      confetti.push({
+        x: cx, y: cy,
+        vx: Math.cos(a) * sp,
+        vy: Math.sin(a) * sp - 6,
+        g: 0.28 + Math.random() * 0.15,
+        w: 6 + Math.random() * 7,
+        h: 4 + Math.random() * 5,
+        color: colors[i % colors.length],
+        rot: Math.random() * Math.PI,
+        vr: (Math.random() - 0.5) * 0.35,
+        life: 1
+      });
+    }
+    if (!confettiRAF) confettiRAF = requestAnimationFrame(stepConfetti);
+  }
+
+  function stepConfetti() {
+    cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    confetti.forEach(p => {
+      p.vy += p.g; p.vx *= 0.99;
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      p.life -= 0.007;
+      cctx.save();
+      cctx.translate(p.x, p.y);
+      cctx.rotate(p.rot);
+      cctx.globalAlpha = Math.max(0, p.life);
+      cctx.fillStyle = p.color;
+      cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      cctx.restore();
+    });
+    confetti = confetti.filter(p => p.life > 0 && p.y < confettiCanvas.height + 40);
+    if (confetti.length) {
+      confettiRAF = requestAnimationFrame(stepConfetti);
+    } else {
+      cctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+      confettiRAF = null;
+    }
+  }
 
   // 各地點剩餘名額
   function remaining() {
@@ -417,6 +535,7 @@
   function selectTeam(t) {
     if (spinning || results[t]) return;
     selectedTeam = t;
+    reel.classList.remove("win");
     reel.textContent = "？？？";
     note.textContent = "請按下抽獎";
     renderTeamGrid();
@@ -448,6 +567,8 @@
     if (spinning) return;
     const team = selectedTeam;
     if (!team || results[team]) return;
+    ensureAudio();  // 使用者手勢中解鎖音訊
+    reel.classList.remove("win");
 
     const rem = remaining();
     const pool = DESTS.filter(d => rem[d.name] > 0).map(d => d.name);
@@ -477,6 +598,7 @@
     let delay = 45;
     function tick() {
       reel.textContent = animPool[Math.floor(Math.random() * animPool.length)];
+      tickSound(ticks / totalTicks);
       ticks++;
       if (ticks >= totalTicks) {
         finish(team, finalDest);
@@ -490,6 +612,11 @@
 
   function finish(team, dest) {
     reel.textContent = dest;
+    reel.classList.remove("win");
+    void reel.offsetWidth;        // 重觸發動畫
+    reel.classList.add("win");
+    fanfare();
+    burstConfetti();
     results[team] = dest;
     save();
     spinning = false;
@@ -502,6 +629,16 @@
 
   // ===== 事件 =====
   drawBtn.addEventListener("click", draw);
+
+  const soundBtn = document.getElementById("soundBtn");
+  function renderSoundBtn() { soundBtn.textContent = soundOn ? "🔊 音效開" : "🔇 音效關"; }
+  soundBtn.addEventListener("click", () => {
+    soundOn = !soundOn;
+    localStorage.setItem("team-lottery-sound", soundOn ? "on" : "off");
+    renderSoundBtn();
+    if (soundOn) { ensureAudio(); tone(880, 0, 0.12, { type: "triangle", vol: 0.25 }); } // 試聽
+  });
+  renderSoundBtn();
   resetBtn.addEventListener("click", () => {
     if (spinning) return;
     if (!confirm("確定要清除所有抽獎結果嗎？")) return;

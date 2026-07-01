@@ -1,6 +1,6 @@
 // 小隊抽獎系統 Service Worker — 離線快取
 // 每次更動 index.html 等檔案後，把 CACHE 版本號 +1 即可讓使用者更新
-const CACHE = "team-lottery-v2";
+const CACHE = "team-lottery-v3";
 const ASSETS = [
   "./",
   "./index.html",
