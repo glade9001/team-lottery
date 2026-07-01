@@ -74,7 +74,42 @@
     box-shadow: 0 12px 40px rgba(0,0,0,.35);
     margin-bottom: 22px;
   }
-  .picker-label { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  .picker-label { color: var(--muted); font-size: 14px; margin-bottom: 10px; }
+
+  .team-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .team-btn {
+    padding: 12px 4px;
+    font-size: 16px;
+    font-weight: 700;
+    border: 2px solid #39406e;
+    border-radius: 12px;
+    background: #10142e;
+    color: var(--text);
+    cursor: pointer;
+    line-height: 1.25;
+    transition: .12s;
+  }
+  .team-btn small { display: block; font-size: 11px; font-weight: 500; margin-top: 2px; }
+  .team-btn:active { transform: scale(.96); }
+  .team-btn.selected {
+    border-color: var(--accent);
+    background: linear-gradient(160deg, #33306a, #26264f);
+    box-shadow: 0 0 0 2px rgba(255,212,94,.35);
+  }
+  .team-btn.done {
+    opacity: .5;
+    cursor: default;
+    border-color: transparent;
+    color: var(--muted);
+  }
+  .team-btn.done small { color: var(--ok); }
+  .team-grid.locked { pointer-events: none; opacity: .6; }
+
   select {
     width: 100%;
     padding: 14px;
@@ -243,7 +278,7 @@
 
   <div class="stage">
     <div class="picker-label">選擇要抽獎的小隊</div>
-    <select id="teamSelect"></select>
+    <div class="team-grid" id="teamGrid"></div>
     <div class="reel" id="reel">？？？</div>
     <div class="result-note" id="note">請選擇小隊後按下抽獎</div>
     <button class="draw" id="drawBtn">開 始 抽 獎</button>
@@ -331,7 +366,7 @@
 
   // ===== 畫面 =====
   const quotaGrid = document.getElementById("quotaGrid");
-  const teamSelect = document.getElementById("teamSelect");
+  const teamGrid = document.getElementById("teamGrid");
   const reel = document.getElementById("reel");
   const note = document.getElementById("note");
   const drawBtn = document.getElementById("drawBtn");
@@ -339,6 +374,7 @@
   const logList = document.getElementById("logList");
 
   let spinning = false;
+  let selectedTeam = null;   // 目前選取的小隊
 
   function renderQuota() {
     const rem = remaining();
@@ -357,22 +393,33 @@
     });
   }
 
-  function renderTeamSelect() {
-    const prev = teamSelect.value;
-    teamSelect.innerHTML = "";
-    TEAMS.forEach(t => {
+  function renderTeamGrid() {
+    // 若目前選取的隊已抽過或未設定，預設跳到第一個尚未抽的小隊
+    if (!selectedTeam || results[selectedTeam]) {
+      selectedTeam = TEAMS.find(t => !results[t]) || null;
+    }
+    teamGrid.innerHTML = "";
+    TEAMS.forEach((t, i) => {
       const done = results[t];
-      const opt = document.createElement("option");
-      opt.value = t;
-      opt.textContent = done ? `${t}（已抽：${done}）` : t;
-      opt.disabled = !!done;
-      teamSelect.appendChild(opt);
+      const btn = document.createElement("button");
+      btn.className = "team-btn" +
+        (done ? " done" : "") +
+        (t === selectedTeam ? " selected" : "");
+      btn.innerHTML = `第${i + 1}隊${done ? `<small>${done}</small>` : ""}`;
+      if (!done) {
+        btn.addEventListener("click", () => selectTeam(t));
+      }
+      teamGrid.appendChild(btn);
     });
-    // 預設選第一個尚未抽的小隊
-    const firstUndrawn = TEAMS.find(t => !results[t]);
-    if (TEAMS.includes(prev) && !results[prev]) teamSelect.value = prev;
-    else if (firstUndrawn) teamSelect.value = firstUndrawn;
     updateDrawBtn();
+  }
+
+  function selectTeam(t) {
+    if (spinning || results[t]) return;
+    selectedTeam = t;
+    reel.textContent = "？？？";
+    note.textContent = "請按下抽獎";
+    renderTeamGrid();
   }
 
   function renderLog() {
@@ -388,19 +435,18 @@
 
   function updateDrawBtn() {
     const allDone = TEAMS.every(t => results[t]);
-    const team = teamSelect.value;
-    const disabled = spinning || allDone || !team || !!results[team];
+    const disabled = spinning || allDone || !selectedTeam || !!results[selectedTeam];
     drawBtn.disabled = disabled;
     if (allDone) drawBtn.textContent = "全部抽完 🎊";
     else drawBtn.textContent = "開 始 抽 獎";
   }
 
-  function renderAll() { renderQuota(); renderTeamSelect(); renderLog(); }
+  function renderAll() { renderQuota(); renderTeamGrid(); renderLog(); }
 
   // ===== 抽獎 =====
   function draw() {
     if (spinning) return;
-    const team = teamSelect.value;
+    const team = selectedTeam;
     if (!team || results[team]) return;
 
     const rem = remaining();
@@ -421,7 +467,7 @@
 
     spinning = true;
     updateDrawBtn();
-    teamSelect.disabled = true;
+    teamGrid.classList.add("locked");
     resetBtn.disabled = true;
     note.textContent = `${team} 抽獎中…`;
 
@@ -447,7 +493,8 @@
     results[team] = dest;
     save();
     spinning = false;
-    teamSelect.disabled = false;
+    selectedTeam = null;   // 自動跳到下一個未抽的小隊
+    teamGrid.classList.remove("locked");
     resetBtn.disabled = false;
     note.textContent = `🎊 ${team} → ${dest}！`;
     renderAll();
@@ -455,13 +502,6 @@
 
   // ===== 事件 =====
   drawBtn.addEventListener("click", draw);
-  teamSelect.addEventListener("change", () => {
-    if (spinning) return;
-    reel.textContent = "？？？";
-    const team = teamSelect.value;
-    note.textContent = results[team] ? `${team} 已抽到：${results[team]}` : "請按下抽獎";
-    updateDrawBtn();
-  });
   resetBtn.addEventListener("click", () => {
     if (spinning) return;
     if (!confirm("確定要清除所有抽獎結果嗎？")) return;
