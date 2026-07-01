@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>小隊抽獎系統</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1226">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="小隊抽獎">
+<style>
+  :root {
+    --bg: #0f1226;
+    --card: #1b2040;
+    --card2: #232a52;
+    --accent: #ffd45e;
+    --accent2: #ff7a59;
+    --text: #f4f6ff;
+    --muted: #9aa3cf;
+    --ok: #4ade80;
+    --full: #64708f;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #2a2f66 0%, var(--bg) 60%);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px 16px 40px;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; position: relative; }
+  h1 {
+    text-align: center;
+    font-size: 26px;
+    margin: 8px 0 4px;
+    letter-spacing: 2px;
+  }
+  .subtitle { text-align: center; color: var(--muted); margin-bottom: 20px; font-size: 14px; }
+
+  /* 剩餘名額 */
+  .quota-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+  .quota {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border: 2px solid transparent;
+    transition: .25s;
+  }
+  .quota.full { opacity: .5; border-color: var(--full); }
+  .quota .name { font-size: 17px; font-weight: 700; }
+  .quota .count { font-size: 14px; color: var(--muted); }
+  .quota .count b { color: var(--accent); font-size: 22px; }
+  .quota.full .count b { color: var(--full); }
+  .quota .members { font-size: 12px; color: var(--muted); margin-top: 4px; min-height: 14px; }
+
+  /* 抽獎區 */
+  .stage {
+    background: linear-gradient(160deg, var(--card2), var(--card));
+    border-radius: 22px;
+    padding: 22px;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0,0,0,.35);
+    margin-bottom: 22px;
+  }
+  .picker-label { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  select {
+    width: 100%;
+    padding: 14px;
+    font-size: 18px;
+    border-radius: 14px;
+    border: none;
+    background: #10142e;
+    color: var(--text);
+    text-align: center;
+    text-align-last: center;
+    margin-bottom: 16px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  select:disabled { opacity: .5; }
+
+  .reel {
+    font-size: 40px;
+    font-weight: 800;
+    min-height: 58px;
+    line-height: 58px;
+    margin: 10px 0 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: 3px;
+  }
+  .result-note { color: var(--muted); font-size: 14px; min-height: 20px; margin-bottom: 14px; }
+
+  button.draw {
+    width: 100%;
+    padding: 18px;
+    font-size: 22px;
+    font-weight: 800;
+    border: none;
+    border-radius: 16px;
+    color: #201400;
+    background: linear-gradient(90deg, var(--accent), #ffb454);
+    cursor: pointer;
+    letter-spacing: 4px;
+    box-shadow: 0 8px 24px rgba(255,180,70,.35);
+    transition: transform .1s;
+  }
+  button.draw:active { transform: scale(.98); }
+  button.draw:disabled {
+    background: #3a4066; color: var(--muted);
+    box-shadow: none; cursor: not-allowed;
+  }
+
+  .footer { display: flex; gap: 12px; margin-top: 4px; }
+  .footer button {
+    flex: 1;
+    padding: 12px;
+    font-size: 14px;
+    border-radius: 12px;
+    border: 1px solid #39406e;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .footer button:active { background: #262c52; }
+
+  /* 已抽名單 */
+  .log { margin-top: 22px; }
+  .log h2 { font-size: 16px; color: var(--muted); margin: 0 0 10px; text-align: center; }
+  .log-row {
+    display: flex; justify-content: space-between;
+    background: var(--card); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 8px; font-size: 15px;
+  }
+  .log-row .dest { color: var(--accent); font-weight: 700; }
+  .empty { text-align: center; color: var(--muted); font-size: 14px; padding: 10px; }
+
+  /* 後台齒輪 */
+  #adminGear {
+    position: absolute;
+    top: 18px; right: 16px;
+    background: rgba(255,255,255,.06);
+    border: none; color: var(--text);
+    font-size: 20px; width: 40px; height: 40px;
+    border-radius: 50%; cursor: pointer;
+  }
+  #adminGear:active { background: rgba(255,255,255,.15); }
+
+  /* Modal */
+  .modal-mask {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(6,8,20,.72);
+    backdrop-filter: blur(3px);
+    z-index: 100;
+    align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .modal-mask.open { display: flex; }
+  .modal {
+    position: relative;
+    background: var(--card);
+    border-radius: 20px;
+    padding: 24px 20px;
+    width: 100%; max-width: 460px;
+    max-height: 86vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal h2 { margin: 0 0 16px; font-size: 20px; text-align: center; }
+  .modal-close {
+    position: absolute; top: 14px; right: 16px;
+    background: none; border: none; color: var(--muted);
+    font-size: 20px; cursor: pointer;
+  }
+  .modal input[type=password] {
+    width: 100%; padding: 14px; font-size: 18px;
+    border-radius: 12px; border: none;
+    background: #10142e; color: var(--text);
+    text-align: center; margin-bottom: 10px;
+  }
+  .modal-err { color: var(--accent2); font-size: 14px; min-height: 20px; text-align: center; }
+  .modal-primary {
+    width: 100%; padding: 14px; font-size: 17px; font-weight: 700;
+    border: none; border-radius: 12px; cursor: pointer;
+    color: #201400; background: linear-gradient(90deg, var(--accent), #ffb454);
+  }
+  .modal-ghost {
+    padding: 14px; font-size: 14px;
+    border: 1px solid #39406e; border-radius: 12px;
+    background: transparent; color: var(--muted); cursor: pointer;
+    white-space: nowrap;
+  }
+  .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .modal-actions .modal-primary { flex: 1; }
+  .admin-hint { color: var(--muted); font-size: 13px; margin-bottom: 14px; line-height: 1.5; }
+  .admin-summary {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-bottom: 14px; font-size: 12px;
+  }
+  .admin-summary span {
+    background: #10142e; padding: 5px 9px; border-radius: 8px; color: var(--muted);
+  }
+  .admin-summary span.over { color: var(--accent2); border: 1px solid var(--accent2); }
+  .admin-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0; border-bottom: 1px solid #2a3157;
+  }
+  .admin-row span { font-size: 15px; }
+  .admin-row select {
+    width: 46%; padding: 9px; font-size: 15px;
+    border-radius: 10px; border: none; margin: 0;
+    background: #10142e; color: var(--text);
+  }
+
+  @media (max-width: 480px) {
+    .quota-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 22px; }
+    .reel { font-size: 32px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button id="adminGear" title="後台" aria-label="後台">⚙️</button>
+  <h1>🎉 小隊抽獎系統</h1>
+  <div class="subtitle">十個小隊，抽出前往的地點</div>
+
+  <div class="quota-grid" id="quotaGrid"></div>
+
+  <div class="stage">
+    <div class="picker-label">選擇要抽獎的小隊</div>
+    <select id="teamSelect"></select>
+    <div class="reel" id="reel">？？？</div>
+    <div class="result-note" id="note">請選擇小隊後按下抽獎</div>
+    <button class="draw" id="drawBtn">開 始 抽 獎</button>
+    <div class="footer">
+      <button id="resetBtn">重置全部</button>
+    </div>
+  </div>
+
+  <div class="log">
+    <h2>抽獎結果</h2>
+    <div id="logList"></div>
+  </div>
+</div>
+
+<!-- 後台 Modal -->
+<div class="modal-mask" id="adminMask">
+  <div class="modal">
+    <button class="modal-close" id="adminClose">✕</button>
+
+    <!-- 登入 -->
+    <div id="adminLogin">
+      <h2>後台登入</h2>
+      <input type="password" id="adminPwd" inputmode="numeric" placeholder="請輸入密碼" autocomplete="off">
+      <div class="modal-err" id="adminErr"></div>
+      <button class="modal-primary" id="adminLoginBtn">登入</button>
+    </div>
+
+    <!-- 設定 -->
+    <div id="adminPanel" style="display:none">
+      <h2>指定抽獎結果</h2>
+      <div class="admin-hint">設「隨機」＝正常抽獎；指定地點後，該小隊轉盤會固定落在指定地點。</div>
+      <div id="adminSummary" class="admin-summary"></div>
+      <div id="adminRows"></div>
+      <div class="modal-actions">
+        <button class="modal-ghost" id="adminClearAssign">清除所有指定</button>
+        <button class="modal-primary" id="adminSaveBtn">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ===== 設定 =====
+  const TEAMS = ["第一小隊","第二小隊","第三小隊","第四小隊","第五小隊",
+                 "第六小隊","第七小隊","第八小隊","第九小隊","第十小隊"];
+  const DESTS = [
+    { name: "中街",     quota: 2 },
+    { name: "溪湖糖廠", quota: 3 },
+    { name: "東螺溪",   quota: 3 },
+    { name: "葡萄園",   quota: 2 },
+  ];
+  const STORE_KEY = "team-lottery-v1";
+  const ASSIGN_KEY = "team-lottery-assign-v1";
+  const ADMIN_PWD = "0000";   // ← 後台密碼，要改這裡
+
+  // ===== 狀態 =====
+  // results: { 小隊名稱: 地點名稱 }
+  let results = load(STORE_KEY);
+  // assignments: { 小隊名稱: 指定地點名稱 }（後台指定，未指定則無此鍵）
+  let assignments = load(ASSIGN_KEY);
+
+  function load(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : {};
+    } catch { return {}; }
+  }
+  function save() { localStorage.setItem(STORE_KEY, JSON.stringify(results)); }
+  function saveAssign() { localStorage.setItem(ASSIGN_KEY, JSON.stringify(assignments)); }
+
+  // 各地點剩餘名額
+  function remaining() {
+    const used = {};
+    DESTS.forEach(d => used[d.name] = 0);
+    Object.values(results).forEach(dest => { if (used[dest] != null) used[dest]++; });
+    const rem = {};
+    DESTS.forEach(d => rem[d.name] = d.quota - used[d.name]);
+    return rem;
+  }
+  // 該地點已分配的小隊
+  function membersOf(destName) {
+    return Object.keys(results).filter(t => results[t] === destName);
+  }
+
+  // ===== 畫面 =====
+  const quotaGrid = document.getElementById("quotaGrid");
+  const teamSelect = document.getElementById("teamSelect");
+  const reel = document.getElementById("reel");
+  const note = document.getElementById("note");
+  const drawBtn = document.getElementById("drawBtn");
+  const resetBtn = document.getElementById("resetBtn");
+  const logList = document.getElementById("logList");
+
+  let spinning = false;
+
+  function renderQuota() {
+    const rem = remaining();
+    quotaGrid.innerHTML = "";
+    DESTS.forEach(d => {
+      const left = rem[d.name];
+      const el = document.createElement("div");
+      el.className = "quota" + (left <= 0 ? " full" : "");
+      el.innerHTML = `
+        <div>
+          <div class="name">${d.name}</div>
+          <div class="members">${membersOf(d.name).join("、") || "—"}</div>
+        </div>
+        <div class="count">剩餘 <b>${left}</b> / ${d.quota}</div>`;
+      quotaGrid.appendChild(el);
+    });
+  }
+
+  function renderTeamSelect() {
+    const prev = teamSelect.value;
+    teamSelect.innerHTML = "";
+    TEAMS.forEach(t => {
+      const done = results[t];
+      const opt = document.createElement("option");
+      opt.value = t;
+      opt.textContent = done ? `${t}（已抽：${done}）` : t;
+      opt.disabled = !!done;
+      teamSelect.appendChild(opt);
+    });
+    // 預設選第一個尚未抽的小隊
+    const firstUndrawn = TEAMS.find(t => !results[t]);
+    if (TEAMS.includes(prev) && !results[prev]) teamSelect.value = prev;
+    else if (firstUndrawn) teamSelect.value = firstUndrawn;
+    updateDrawBtn();
+  }
+
+  function renderLog() {
+    const drawn = TEAMS.filter(t => results[t]);
+    if (drawn.length === 0) {
+      logList.innerHTML = `<div class="empty">尚未有抽獎結果</div>`;
+      return;
+    }
+    logList.innerHTML = drawn.map(t =>
+      `<div class="log-row"><span>${t}</span><span class="dest">${results[t]}</span></div>`
+    ).join("");
+  }
+
+  function updateDrawBtn() {
+    const allDone = TEAMS.every(t => results[t]);
+    const team = teamSelect.value;
+    const disabled = spinning || allDone || !team || !!results[team];
+    drawBtn.disabled = disabled;
+    if (allDone) drawBtn.textContent = "全部抽完 🎊";
+    else drawBtn.textContent = "開 始 抽 獎";
+  }
+
+  function renderAll() { renderQuota(); renderTeamSelect(); renderLog(); }
+
+  // ===== 抽獎 =====
+  function draw() {
+    if (spinning) return;
+    const team = teamSelect.value;
+    if (!team || results[team]) return;
+
+    const rem = remaining();
+    const pool = DESTS.filter(d => rem[d.name] > 0).map(d => d.name);
+    const rigged = assignments[team];  // 後台指定地點（可能未指定）
+
+    let finalDest;
+    if (rigged) {
+      finalDest = rigged;              // 後台指定：直接鎖定，不受剩餘名額限制
+    } else {
+      if (pool.length === 0) { note.textContent = "名額已滿，無法再抽"; return; }
+      finalDest = pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    // 轉盤動畫用的候選（偽裝），確保包含最終地點
+    const animPool = pool.length ? pool.slice() : DESTS.map(d => d.name);
+    if (!animPool.includes(finalDest)) animPool.push(finalDest);
+
+    spinning = true;
+    updateDrawBtn();
+    teamSelect.disabled = true;
+    resetBtn.disabled = true;
+    note.textContent = `${team} 抽獎中…`;
+
+    // 轉盤動畫：逐漸變慢
+    let ticks = 0;
+    const totalTicks = 22 + Math.floor(Math.random() * 8);
+    let delay = 45;
+    function tick() {
+      reel.textContent = animPool[Math.floor(Math.random() * animPool.length)];
+      ticks++;
+      if (ticks >= totalTicks) {
+        finish(team, finalDest);
+        return;
+      }
+      if (ticks > totalTicks - 8) delay += 35; // 尾段變慢
+      setTimeout(tick, delay);
+    }
+    tick();
+  }
+
+  function finish(team, dest) {
+    reel.textContent = dest;
+    results[team] = dest;
+    save();
+    spinning = false;
+    teamSelect.disabled = false;
+    resetBtn.disabled = false;
+    note.textContent = `🎊 ${team} → ${dest}！`;
+    renderAll();
+  }
+
+  // ===== 事件 =====
+  drawBtn.addEventListener("click", draw);
+  teamSelect.addEventListener("change", () => {
+    if (spinning) return;
+    reel.textContent = "？？？";
+    const team = teamSelect.value;
+    note.textContent = results[team] ? `${team} 已抽到：${results[team]}` : "請按下抽獎";
+    updateDrawBtn();
+  });
+  resetBtn.addEventListener("click", () => {
+    if (spinning) return;
+    if (!confirm("確定要清除所有抽獎結果嗎？")) return;
+    results = {};
+    save();
+    reel.textContent = "？？？";
+    note.textContent = "已重置，請選擇小隊後按下抽獎";
+    renderAll();
+  });
+
+  // ===== 後台 =====
+  const adminGear = document.getElementById("adminGear");
+  const adminMask = document.getElementById("adminMask");
+  const adminClose = document.getElementById("adminClose");
+  const adminLogin = document.getElementById("adminLogin");
+  const adminPanel = document.getElementById("adminPanel");
+  const adminPwd = document.getElementById("adminPwd");
+  const adminErr = document.getElementById("adminErr");
+  const adminLoginBtn = document.getElementById("adminLoginBtn");
+  const adminRows = document.getElementById("adminRows");
+  const adminSummary = document.getElementById("adminSummary");
+  const adminSaveBtn = document.getElementById("adminSaveBtn");
+  const adminClearAssign = document.getElementById("adminClearAssign");
+
+  function openAdmin() {
+    adminMask.classList.add("open");
+    adminLogin.style.display = "";
+    adminPanel.style.display = "none";
+    adminPwd.value = "";
+    adminErr.textContent = "";
+    setTimeout(() => adminPwd.focus(), 50);
+  }
+  function closeAdmin() { adminMask.classList.remove("open"); }
+
+  function tryLogin() {
+    if (adminPwd.value === ADMIN_PWD) {
+      adminLogin.style.display = "none";
+      adminPanel.style.display = "";
+      renderAdminPanel();
+    } else {
+      adminErr.textContent = "密碼錯誤";
+      adminPwd.value = "";
+      adminPwd.focus();
+    }
+  }
+
+  function renderAdminSummary() {
+    const count = {};
+    DESTS.forEach(d => count[d.name] = 0);
+    Object.values(assignments).forEach(dest => { if (count[dest] != null) count[dest]++; });
+    adminSummary.innerHTML = DESTS.map(d => {
+      const over = count[d.name] > d.quota;
+      return `<span class="${over ? "over" : ""}">${d.name} 指定 ${count[d.name]}/${d.quota}</span>`;
+    }).join("");
+  }
+
+  function renderAdminPanel() {
+    adminRows.innerHTML = "";
+    TEAMS.forEach(t => {
+      const row = document.createElement("div");
+      row.className = "admin-row";
+      const drawn = results[t] ? `（已抽：${results[t]}）` : "";
+      const opts = ['<option value="">隨機</option>']
+        .concat(DESTS.map(d =>
+          `<option value="${d.name}" ${assignments[t] === d.name ? "selected" : ""}>${d.name}</option>`))
+        .join("");
+      row.innerHTML = `<span>${t}<small style="color:var(--muted)">${drawn}</small></span>
+                       <select data-team="${t}">${opts}</select>`;
+      adminRows.appendChild(row);
+    });
+    adminRows.querySelectorAll("select").forEach(sel => {
+      sel.addEventListener("change", () => {
+        const team = sel.getAttribute("data-team");
+        if (sel.value) assignments[team] = sel.value;
+        else delete assignments[team];
+        renderAdminSummary();
+      });
+    });
+    renderAdminSummary();
+  }
+
+  adminGear.addEventListener("click", openAdmin);
+  adminClose.addEventListener("click", closeAdmin);
+  adminMask.addEventListener("click", e => { if (e.target === adminMask) closeAdmin(); });
+  adminLoginBtn.addEventListener("click", tryLogin);
+  adminPwd.addEventListener("keydown", e => { if (e.key === "Enter") tryLogin(); });
+  adminSaveBtn.addEventListener("click", () => {
+    saveAssign();
+    closeAdmin();
+    renderAll();
+    note.textContent = "後台設定已儲存";
+  });
+  adminClearAssign.addEventListener("click", () => {
+    if (!confirm("確定清除所有『指定』設定嗎？（不影響已抽結果）")) return;
+    assignments = {};
+    saveAssign();
+    renderAdminPanel();
+  });
+
+  // ===== 啟動 =====
+  renderAll();
+
+  // ===== 註冊 Service Worker（離線）=====
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
